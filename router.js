@@ -62,21 +62,71 @@ var connection = mysql.createConnection({
 // });
 
 
+// isUpdate();
 
+// 查询今天的待做事项
+router.post('/list/todo/today', function(req,res) {
+  // 编码
+  res.setHeader('Content-Type','text/plain; charset=utf-8');
+  // 输出接口
+  console.log('接口:',req.url,' 参数：',req.body);
+  let data = {};
+  let sql1 = `SELECT count(eventID) as total FROM event WHERE eventStatus=1`;
+  connection.query(sql1,  function (error, results, fields) {
+    data.total = results[0].total
+  });
+  let startData =  (req.body.page-1)*req.body.rows;
+  let endData = req.body.page*req.body.rows+req.body.rows;
+  let sql = `SELECT * FROM event WHERE eventStatus=1  limit `+ startData +`,`+req.body.rows;
+  connection.query(sql,  function (error, results, fields) {
+    if (error) {
+      console.log('查询今日待做事项失败');
+    }else{
+      data.success = true;
+      data.data = []
+      for(let i=0; i<results.length; i++) {
+        let temp = {};
+        temp.name = results[i].eventName;
+        if (results[i].priority == 0) temp.type = 'alert';
+        if (results[i].priority == 1) temp.type = 'need';
+        if (results[i].priority == 2) temp.type = 'free';
+        temp.remark = results[i].remark;
+        console.log(results[i].timepoint, 'results[i].timepoint');
+        console.log((new Date(results[i].timepoint)).getTime(), 'results[i].timepoint');
+        if (results[i].timepoint) {
+          temp.timepoint = (new Date(results[i].timepoint)).getTime();
+        }else{
+          temp.timepoint = 0;
+        }
+        temp.id = results[i].eventID;
+        data.data.push(temp);
+      }
+      res.end(JSON.stringify(data));
+    }
+  });
+});
 
 // 新增todo
 router.post('/todo/addEvent', function (req, res) {
   // 编码
-  // res.setHeader('Content-Type','text/plain; charset=utf-8');
+  res.setHeader('Content-Type','text/plain; charset=utf-8');
   // 输出接口
   console.log('接口:',req.url,' 参数：',req.body);
   // 获取创建时间
   createTime = formatDate(new Date());
   //处理开始的参数
-  startTime = formatDate(req.body.startTime);
+  if (req.body.startTime == '' || req.body.startTime == undefined) {
+    startTime = createTime;
+  }else {
+    startTime = formatDate((new Date(req.body.startTime)).getTime()+1000*60*60*8);
+  }
   // 处理提醒方式的参数
   let interval=0, ranges=0, targetTotal=0;
-  targetTotal = req.body.ownNum;
+  targetTotal = 'max';
+  if (req.body.type == 'once') targetTotal = 1;
+  if (req.body.times == 'yes') {
+    targetTotal = req.body.ownNum
+  }
   interval = req.body.ownInterval;
   ranges = req.body.ownRange;
   
@@ -84,7 +134,7 @@ router.post('/todo/addEvent', function (req, res) {
   let item = initNextTime(temp, req.body.repeatType, req.body.type,ranges);
 
   let sql = 'insert into event(userId, intervals, ranges, targetTotal,createTime,startTime,nextSTime,nextETime,eventStatus,type,y,m,d,tag,priority,timepoint,remark,eventName) '
-  +'values( \''+ req.body.userId +'\', \''+ interval +'\',  \''+ ranges +'\', \''+ targetTotal +'\',\''+ createTime +'\',\''+ startTime +'\', \''+ item.st +'\', \''+ item.et +'\', 1,\''+ req.body.repeatType +'\',\''+ req.body.type +'\',\''+ req.body.type +'\',\''+ req.body.type +'\',\'['+ req.body.tagData +']\',\''+ req.body.priority +'\',\''+ req.body.deadline +'\',\''+ req.body.remark +'\',\''+ req.body.name +'\')';
+  +'values( \''+ req.body.userId +'\', \''+ interval +'\',  \''+ ranges +'\', \''+ targetTotal +'\',\''+ createTime +'\',\''+ startTime +'\', \''+ item.st +'\', \''+ item.et +'\', 0,\''+ req.body.repeatType +'\',\''+ req.body.type +'\',\''+ req.body.type +'\',\''+ req.body.type +'\',\'['+ req.body.tagData +']\',\''+ req.body.priority +'\',\''+ req.body.deadline +'\',\''+ req.body.remark +'\',\''+ req.body.name +'\')';
 
     connection.query(sql, function (error, results, fields) {
     let data = {};
@@ -98,7 +148,6 @@ router.post('/todo/addEvent', function (req, res) {
     }
     res.end(JSON.stringify(data));
   });
-
   initEvent();
 });
 
@@ -171,31 +220,56 @@ function initEvent(){
     } 
     else {
       let item = results[0];
-      if(item.nextSTime == formatDate(new Date())) {
+      if(item.nextSTime <= formatDate(new Date())) {
         item.total++;
         addHis(item);
         updateHandle(item);
         eventStatusHandle(item);
       }
+      console.log('初始化新建事件成功');
     }
   });
+}
+
+// 系统是否需要更新
+function isUpdate(){
+  let sql = `SELECT * FROM systemLog WHERE createTime=`+ formatDate(new Date());
+  connection.query(sql, function(error, results, fields) {
+    if(error){
+      console.log('查询系统日志错误');
+    }else{
+      if(results.length ==0) {
+        systemUpdate();
+      }
+    }
+  })
 }
 
 // 系统每日的更新
 function systemUpdate() {
   // 为所需事件更新休眠状态
-  // toSleep();
+  toSleep();
   let sql = `SELECT * FROM event WHERE eventIsSleep!=2 && eventStatus!=2`;
   connection.query(sql,  function(error, results, fields) {
     if(error) {
       console.log('筛选更新数据失败');
     }else{
-      for(let i=0; i<results.length();i++) {
+      for(let i=0; i<results.length;i++) {
         let item = results[i];
-        if (item.nextSTime < formatDate(new Date())){
+        if (item.nextETime < formatDate(new Date())){
           if(item.total == item.targetTotal) {
-            
+            sleepHandle(item);
+            if(hisIsClose(item)) {
+              closeHis(item, 3);
+            }
+          }else{
+            if(hisIsClose(item)) {
+              closeHis(item, 3);
+            }
+            getNextTime(item);
           }
+        }else if(item.nextSTime < formatDate(new Date())){
+          eventStatusHandle (item);
         }
       }
     }
@@ -214,7 +288,24 @@ function toNextTime() {
     }else {
       results.forEach( item=> {
         getNextTime(item);
+        // closeHis(item, log);
       });
+    }
+  });
+}
+
+// 判断某条记录是否关闭
+function hisIsClose(item) {
+  let sql = `SELECT hisStatus FROM history WHERE eventID = `+ item.eventID +` && hisOrder=` + item.total;
+  connection.query(sql, function (error, results, fields) {
+    if (error) {
+      console.log('查询记录状态失败');
+    }else{
+      if(results[0] == 0) {
+        return false;
+      }else{
+        return true;
+      }
     }
   });
 }
@@ -227,7 +318,7 @@ function toSleep(){
       console.log('筛选需要休眠的数据时发生错误');
     }
     else {
-      for(let i = 0; i < results.length(); i++) {
+      for(let i = 0; i < results.length; i++) {
         let item = results[i];
         sleepHandle(item);
       }
