@@ -1,6 +1,8 @@
 var express = require('express');
 var router = express.Router();
 var mysql = require('mysql');
+var async = require('async');
+var await = require('await');
 
 
 // 创建连接
@@ -11,58 +13,729 @@ var connection = mysql.createConnection({
   database: 'todolist'
 });
 
+// 测试函数
+router.post('/test', function (req, res) {
+  // 编码
+  // res.setHeader('Content-Type','text/plain; charset=utf-8');
+  // 输出接口
+  console.log('接口:',req.url,' 参数：',req.body);
+  // console.log(formatDate(GetDay(new Date(), -1)), 'ormatDate(GetDay(new Date(), -1))');
+  // console.log(formatDate(new Date()));
+  // console.log('2019-09-11 23:33:11'>'2019-09-11 23:38:11');
+  // console.log(GetDay('2019-04-01', 3));
+  let date = new Date();
+  console.log(formatDate(date) + ' ' +getHMS(date));
+});
 
+// function (error, results, fields) 
+// res.end(JSON.stringify(data));
 
-// 连接数据库
-// connection.connect();
+var flag = false;
+var hisflag = false;
+// init();
 
+// 删除所有的记录
+router.post('/list/history/deleteAll', function(req, res) {
+  // 编码
+  res.setHeader('Content-Type','text/plain; charset=utf-8');
+  // 输出接口
+  console.log('接口:',req.url,' 参数：',req.body);
+  let data ={};
+  data.success = false;
+  let sql = `UPDATE history SET shows=1`;
+  connection.query(sql, function(error) {
+    if(error) {
+      res.end(JSON.stringify(data));
+      console.log('删除所有的记录失败');
+      console.log(sql);
+    }else{
+      data.success =true;
+      res.end(JSON.stringify(data));
+    }
+  });
+});
 
-// router.get('/', function (req, res) {
-//   console.log('你好');
-// });
+// 删除记录
+router.post('/list/history/delete', function(req, res) {
+  // 编码
+  res.setHeader('Content-Type','text/plain; charset=utf-8');
+  // 输出接口
+  console.log('接口:',req.url,' 参数：',req.body);
+  let data ={};
+  data.success = false;
+  let sql = `UPDATE history SET shows=1 WHERE hisId =`+ req.body.id;
+  connection.query(sql, function(error) {
+    if(error) {
+      res.end(JSON.stringify(data));
+      console.log('删除记录失败');
+      console.log(sql);
+    }else{
+      data.success =true;
+      res.end(JSON.stringify(data));
+    }
+  });
+});
 
-// router.get('/todo/add', function (req, res) {
-//   console.log('/todo/add');
-// });
+// 暂停事件
+router.post('/list/history/pause', function (req, res) {
+  // 编码
+  res.setHeader('Content-Type','text/plain; charset=utf-8');
+  // 输出接口
+  console.log('接口:',req.url,' 参数：',req.body);
+  let sql = `UPDATE event SET eventIsSleep='1' WHERE eventID=` + req.body.id;
+  let data = {};
+  data.success = false;
+  connection.query(sql, function(error) {
+    if(error) {
+      console.log('暂停事件失败');
+      console.log(sql);
+      res.end(JSON.stringify(data));
+    }else{
+      data.success = true;
+      res.end(JSON.stringify(data));
+    }
+  });
+});
 
-// router.post('/todo/add', function (req, res) {
-//   console.log('/todo/add,post');
-//   console.log(req.body,'body');
-//   res.setHeader('Content-Type','text/plain; charset=utf-8');
-//   let data = {
-//     data: {
-//       name:'丫头',
-//       age: '11'
+// 事件清单
+router.post('/eventlist', function (req, res) {
+  // 编码
+  res.setHeader('Content-Type','text/plain; charset=utf-8');
+  // 输出接口
+  console.log('接口:',req.url,' 参数：',req.body);
+  let sql = `SELECT * FROM event WHERE userid = '`+ req.body.userid +`'`;
+  let data = {};
+  data.success = false;
+  connection.query(sql, function(error, result){
+    if(error){
+      console.log('查询时间清单失败');
+      console.log(sql);
+      res.end(JSON.stringify(data));
+    }else{
+      data.success = true;
+      data.data = [];
+      data.total = result.length;
+      for(let i = 0; i<result.length;i++){
+        let temp = result[i];
+        let unit;
+        switch(temp.type) {
+          case 'y': unit = "年";break;
+          case 'm': unit = "月";break;
+          case 'd': unit = "天";break;
+        }
+        switch(temp.y){
+          case 'once': unit = '一' + unit; break;
+          case 'workday': unit = '工作日'; break;
+          case 'weekend': unit = '周末'; break;
+          case 'every': unit = '每' + unit; break;
+          case 'odd': unit = '奇数' + unit; break;
+          case 'even': unit = '偶数' + unit; break;
+          case 'own': unit = '一天' + unit; break;
+        }
+        switch(temp.eventIsSleep) {
+          case '0': temp.eventIsSleep = '可以触发';break;
+          case '1': temp.eventIsSleep = '暂时停止';break;
+          case '2': temp.eventIsSleep = '永久失效';break;
+        }
+        switch(temp.priority){
+          case '0': temp.priority = '最高';break;
+          case '1': temp.priority = '中等';break;
+          case '2': temp.priority = '最低';break;
+        }
+        if(temp.remark == undefined || temp.remark == 'undefined') {
+          temp.remark = '暂无';
+        }
+        data.data.push({
+          id: temp.eventID,
+          name: temp.eventName,
+          createTime: temp.createTime,
+          nearTime: temp.nextSTime + ' ~ ' +temp.nextETime,
+          unit: unit,
+          createTime: temp.createTime,
+          priority: temp.priority,
+          remark: temp.remark,
+          status: temp.eventIsSleep
+        });
+        
+      }
+      res.end(JSON.stringify(data));
+    }
+  });
+});
+
+// 查询某一日的完成清单
+router.post('/day/before', async function (req, res) {
+  // 编码
+  res.setHeader('Content-Type','text/plain; charset=utf-8');
+  // 输出接口
+  console.log('接口:',req.url,' 参数：',req.body);
+  let date = formatDate(req.body.time);
+  let data = {};
+  let sql = `SELECT * FROM history WHERE usertime LIKE '`+ date +`%' && userid='`+ req.body.userid +`' ORDER BY usertime`;
+  connection.query(sql, function (error,result){
+    if (error) {
+      console.log('查询往日清单失败');
+      console.log(sql);
+    }else{
+      data.success = true;
+      data.data = [];
+      for(let i=0; i<result.length; i++) {
+        let temp = result[i];
+        data.data.push({name: temp.eventName, time: temp.usertime.substring(11, temp.usertime.length)});
+      }
+      res.end(JSON.stringify(data));
+    }
+  });
+});
+
+// 每天的todo完成清单
+router.post('/day', async function (req, res) {
+  // 编码
+  res.setHeader('Content-Type','text/plain; charset=utf-8');
+  // 输出接口
+  console.log('接口:',req.url,' 参数：',req.body);
+  let data = {};
+  let sql = `SELECT * FROM history WHERE usertime LIKE '`+ formatDate(new Date()) +`%' && userid='`+ req.body.userid +`' ORDER BY usertime`;
+  connection.query(sql, function (error,result){
+    if (error) {
+      console.log('查询今日清单失败');
+      console.log(sql);
+    }else{
+      data.success = true;
+      data.data = [];
+      for(let i=0; i<result.length; i++) {
+        let temp = result[i];
+        data.data.push({name: temp.eventName, time: temp.usertime.substring(11, temp.usertime.length)});
+      }
+      res.end(JSON.stringify(data));
+    }
+  });
+});
+
+// 今日与昨日，视图
+router.post('/pandect', async function (req, res) {
+   // 编码
+   res.setHeader('Content-Type','text/plain; charset=utf-8');
+   // 输出接口
+   console.log('接口:',req.url,' 参数：',req.body);
+  let data = {};
+  data.success = false;
+  let sql =`SELECT * FROM statistics WHERE createTime = '`+ formatDate(new Date()) +`' && userid ='`+ req.body.userid +`'`;
+  connection.query(sql, function(error, result) {
+    if (error) {
+      console.log('查询统计失败');
+      console.log(sql);
+    }else{
+      data.success = true;
+      let temp =result[0];
+      data.data = [];
+      data.data.push({value: temp.doTotal, name: '已经完成的事情'});
+      data.data.push({value: temp.cancel, name: '取消掉的事情'});
+      data.data.push({value: temp.total - temp.cancel - temp.doTotal, name: '待做的事情'});
+      data.names = ['已经完成的事情', '取消掉的事情','待做的事情']
+      res.end(JSON.stringify(data));
+    }
+  });
+});
+router.post('/pandect/Yestday', async function (req, res) {
+  // 编码
+  res.setHeader('Content-Type','text/plain; charset=utf-8');
+  // 输出接口
+  console.log('接口:',req.url,' 参数：',req.body);
+ let data = {};
+ data.success = false;
+ let sql =`SELECT * FROM statistics WHERE createTime = '`+ GetDay(new Date(), -1) +`' && userid ='`+ req.body.userid +`'`;
+ connection.query(sql, function(error, result) {
+   if (error) {
+     console.log('查询统计失败');
+     console.log(sql);
+   }else{
+     if (result.length == 0) {
+      res.end(JSON.stringify(data));
+     }else {
+      data.success = true;
+      let temp =result[0];
+      data.data = [];
+      data.data.push({value: temp.doTotal, name: '已经完成的事情'});
+      data.data.push({value: temp.cancel, name: '取消掉的事情'});
+      data.data.push({value: temp.total - temp.cancel - temp.doTotal, name: '待做的事情'});
+      data.names = ['已经完成的事情', '取消掉的事情','待做的事情']
+      res.end(JSON.stringify(data));
+     }
+   }
+ });
+});
+
+// 首页
+router.post('/init', async function (req, res) {
+  await init(req.body.userid);
+  res.end();
+});
+
+// 初入页面的响应
+function init(userid){
+   console.log('初入页面的响应');
+   // 调用更新库中状态的方法
+   isUpdate(userid);
+   // 调用本日待做事项的方法
+  //  isStatistics(2);
+}
+
+// function isStatistics(userid) {
+//   let sql = `SELECT COUNT(pass) as nums FROM statistics WHERE userid = `+ userid +` && createTime='`+ formatDate(new Date()) +`'`;
+//   connection.query(sql, function (error, results, fields) {
+//     if(error) {
+//       console.log('查询今日总计失败');
+//     }else{
+//       if(results[0] == 0) {
+//         // 创建记录
+//         createStatistics(userid);
+//       }
 //     }
-//   };
-
-//   // 操作数据库
-//   connection.query('select * from users', function(error, results, fields) {
-//     if (error) console.log(error, '连接数据库失败');
-//     if(results)
-
-//     {
-
-//         for(var i = 0; i < results.length; i++)
-
-//         {
-
-//             console.log("%d\t%s\t%s", results[i].id, results[i].name, results[i].age);
-
-//         }
-
-//     }   
-//   // 关闭数据库连接
-//   connection.end();
 //   });
+// }
 
-//   res.json(data);
-//   // res.end(JSON.stringify(data));
-//   res.end();
-// });
+function getHMS(date){
+  let h = date.getHours();
+  let m = date.getMinutes();
+  let s = date.getSeconds();
+  h = h<10? '0'+h : h;
+  m = m<10? '0'+m : m;
+  s = s<10? '0'+s : s;
+  return h + ':' + m + ':' + s;
+}
 
 
-// isUpdate();
+// 查询昨日todo,根据事件名称
+router.post('/list/todo/yesterdayByName', function(req,res){
+  // 编码
+  res.setHeader('Content-Type','text/plain; charset=utf-8');
+  // 输出接口
+  console.log('接口:',req.url,' 参数：',req.body);
+  let startData =  (req.body.page-1)*req.body.rows;
+  let sql = `SELECT eventID,hisOrder,loges,createTime,startTime,endTime,hisId FROM history WHERE endTime<= '`+ formatDate(new Date()) +`'&& userid= '`+ req.body.userId +`' && hisStatus!=1 && eventName LIKE '`+ req.body.name +`%' limit `+ startData +`,`+req.body.rows;
+  let sql3 = `SELECT count(userid) as total FROM history WHERE endTime<= '`+ formatDate(new Date()) +`'&& userid= '`+ req.body.userId +`' && hisStatus!=1 && eventName LIKE '%`+ req.body.name +`%'`;  
+  let data = {};
+  data.data = [];
+  connection.query(sql3, function(error, results3) {
+    if(error) {
+      console.log('查询总数失败了');
+      console.log(sql3);
+    }else{
+      data.total = results3[0].total
+    }
+  });
+  connection.query(sql, function(error, results) {
+    if(error) {
+      console.log('获取历史记录失败');
+      console.log(sql);
+    }else{
+      for(let i=0; i<results.length; i++){
+        let temp ={};
+        temp.eventID = results[i].eventID;
+        let sql2 = `SELECT * FROM event WHERE eventID= '`+ temp.eventID +`' && eventName like '`+ req.body.name +`%'`;
+        connection.query(sql2, function(error,results2) {
+          if(error){
+            console.log('查询昨日todo，查询事件详情失败');
+            console.log(sql2);
+          }
+          else{
+            temp.hisOrder = results[i].hisOrder;
+            temp.loges = results[i].loges;
+            switch(temp.loges) {
+              case '0': temp.loges= '已完成';break;
+              case '1': temp.loges= '已取消';break;
+              case '2': temp.loges= '用户已终止';break;
+              case '3': temp.loges= '用户错过';break;
+              default: temp.loges= '';break;
+            }
+            temp.name = results2[0].eventName;
+            temp.eventCreateTime = results2[0].createTime;
+            temp.createTime = results[i].createTime;
+            temp.startTime = results[i].startTime;
+            temp.endTime = results[i].endTime;
+            temp.id = results2[0].eventID;
+            temp.hisId = results[i].hisId;
+            switch(results2[0].eventIsSleep){
+              case '0': temp.eventIsSleep = '可以触发';break;
+              case '1': temp.eventIsSleep = '暂时停止';break;
+              case '2': temp.eventIsSleep = '永久失效';break;
+            }
+            data.data.push(temp);
+            if(i==results.length-1) { 
+              data.success = true;
+              res.end(JSON.stringify(data));
+            }
+          }
+        });
+      }
+    }
+  });
+});
+
+
+// 查询昨日todo
+router.post('/list/todo/yesterday', function(req,res){
+  // 编码
+  res.setHeader('Content-Type','text/plain; charset=utf-8');
+  // 输出接口
+  console.log('接口:',req.url,' 参数：',req.body);
+  let startData =  (req.body.page-1)*req.body.rows;
+  let sql = `SELECT eventID,hisOrder,loges,createTime,startTime,endTime,hisId FROM history WHERE endTime<= '`+ formatDate(new Date()) +`'&& userid= '`+ req.body.userId +`' && hisStatus!=1 && shows IS NULL limit `+ startData +`,`+req.body.rows;
+  let sql3 = `SELECT count(userid) as total FROM history WHERE endTime<= '`+ formatDate(new Date()) +`'&& userid= '`+ req.body.userId +`' && hisStatus!=1 && shows IS NULL`;  
+  let data = {};
+  data.data = [];
+  connection.query(sql3, function(error, results3) {
+    if(error) {
+      console.log('查询总数失败了');
+      console.log(sql3);
+    }else{
+      data.total = results3[0].total
+    }
+  });
+  connection.query(sql, function(error, results) {
+    if(error) {
+      console.log('获取历史记录失败');
+      console.log(sql);
+    }else{
+      for(let i=0; i<results.length; i++){
+        let temp ={};
+        temp.eventID = results[i].eventID;
+        let sql2 = `SELECT * FROM event WHERE eventID= '`+ temp.eventID +`'`;
+        connection.query(sql2, function(error,results2) {
+          if(error){
+            console.log('查询昨日todo，查询事件详情失败');
+            console.log(sql2);
+          }
+          else{
+            temp.hisOrder = results[i].hisOrder;
+            temp.loges = results[i].loges;
+            switch(temp.loges) {
+              case '0': temp.loges= '已完成';break;
+              case '1': temp.loges= '已取消';break;
+              case '2': temp.loges= '用户已终止';break;
+              case '3': temp.loges= '用户错过';break;
+              default: temp.loges= '';break;
+            }
+            temp.name = results2[0].eventName;
+            temp.eventCreateTime = results2[0].createTime;
+            temp.createTime = results[i].createTime;
+            temp.startTime = results[i].startTime;
+            temp.endTime = results[i].endTime;
+            temp.id = results2[0].eventID;
+            temp.hisId = results[i].hisId;
+            switch(results2[0].eventIsSleep){
+              case '0': temp.eventIsSleep = '可以触发';break;
+              case '1': temp.eventIsSleep = '暂时停止';break;
+              case '2': temp.eventIsSleep = '永久失效';break;
+            }
+            data.data.push(temp);
+            if(i==results.length-1) { 
+              data.success = true;
+              res.end(JSON.stringify(data));
+            }
+          }
+        });
+      }
+    }
+  });
+});
+
+// 修改todo信息
+router.post('/list/todo/totady/edit', function(req,res) {
+  // 编码
+  res.setHeader('Content-Type','text/plain; charset=utf-8');
+  // 输出接口
+  console.log('接口:',req.url,' 参数：',req.body);
+  let data = {};
+  data.success = false;
+  let sql =`UPDATE event SET remark='`+ req.body.remark +`',priority= '`+ req.body.type +`', eventName='`+ req.body.name +`' WHERE eventID=`+req.body.id;
+  connection.query(sql, function(error) {
+    if (error) {
+      console.log('修改事件信息失败');
+      console.log(sql);
+    }else{
+      data.success = true;
+    }
+    res.end(JSON.stringify(data));
+  });
+  let sql2 =`UPDATE history SET eventName='`+ req.body.name +`' WHERE eventName='`+ req.body.oldName +`'`;
+  connection.query(sql2, function(error) {
+    if(error) {
+      console.log('修改历史记录中的名称失败');
+    }else{
+      console.log('修改历史记录中的名称成功');
+    }
+  }) 
+});
+
+// 用户删除提醒
+router.post('/list/todo/today/delete', function(req,res) {
+  // 编码
+  res.setHeader('Content-Type','text/plain; charset=utf-8');
+  // 输出接口
+  console.log('接口:',req.url,' 参数：',req.body);
+  let data = {};
+  data.success = false;
+  let sql = `UPDATE event SET eventIsSleep='2',loges='1' WHERE eventID=`+ req.body.id;
+  connection.query(sql, function (error, results, fields) {
+    if(error){
+      console.log('删除提醒失败');
+      console.log(sql);
+      res.end(JSON.stringify(data));
+    }else{
+      data.success = true;
+      res.end(JSON.stringify(data));
+    }
+  });
+});
+
+// 用户取消提醒
+router.post('/list/todo/today/cancel', function(req,res) {
+  // 编码
+  res.setHeader('Content-Type','text/plain; charset=utf-8');
+  // 输出接口
+  console.log('接口:',req.url,' 参数：',req.body);
+  let sql = `SELECT * FROM event WHERE eventID='`+ req.body.id+ `'`;
+  let data = {};
+  connection.query(sql, function (error, results, fields) {
+    if (error) {
+      console.log('获取事件信息失败eventID:',req.body.id);
+      console.log(sql);
+    }
+    else{
+      console.log('获取事件信息成功eventID:',req.body.id);
+      let item = results[0];
+      let sql2 = `UPDATE history SET hisStatus='0',usertime='`+ formatDate(new Date()) +`',loges='1' WHERE eventID= '`+ item.eventID +`' && userid= '`+ item.userId +`'&&hisOrder= '`+ item.total +`'`;
+      connection.query(sql2, function (error, results, fields) {
+        if (error) {
+        console.log('用户取消提醒，关闭历史记录失败');
+        console.log(sql2);
+        }else{
+         console.log('用户取消提醒，关闭历史记录成功');
+          let sql3 = `UPDATE event SET eventStatus=2 WHERE eventID=`+item.eventID;
+          connection.query(sql3, function(error, results, fields){
+            if(error){
+              console.log('用户取消，更新事件状态失败');
+              console.log(sql3);
+            }else {
+              data.success = true;
+              updateStatisticsCancel(item.userId)
+              res.end(JSON.stringify(data));
+            }
+          });
+        }
+      });
+    }
+  });
+});
+
+// 用户取消，刷新今日统计
+function updateStatisticsCancel (userid) {
+  let sql =`UPDATE statistics SET cancel=cancel+1 WHERE userid='`+ userid +`' && createTime='`+ formatDate(new Date()) +`'`;
+  connection.query(sql, function(error) {
+    if(error) {
+      console.log('用户取消，刷新今日统计失败');
+      console.log(sql);
+    }else{
+      console.log('用户取消，刷新今日统计成功');
+    }
+  });
+}
+
+// 创建今日的总计
+function createStatistics(userid) {
+  let sql = `INSERT INTO statistics(userid,createTime,total,doTotal,cancel,pass) VALUES('`+ userid +`', '`+ formatDate(new Date()) +`',0,0,0,0)`;
+  connection.query(sql, function (error, results, fields) {
+    if(error) {
+      console.log('创建今日统计记录失败');
+      console.log(sql);
+    }else{
+      console.log('创建今日统计记录成功');
+    }
+  });
+}
+
+// 查询todo事项的详情
+router.post('/list/todo/detail', function(req,res){
+   // 编码
+   res.setHeader('Content-Type','text/plain; charset=utf-8');
+   // 输出接口
+   console.log('接口:',req.url,' 参数：',req.body);
+   let sql = `SELECT * FROM event WHERE eventID =`+ req.body.id;
+   let data = {};
+   connection.query(sql,  function (error, results, fields) {
+     if(error) {
+      console.log('查询todo详情失败');
+      console.log(sql);
+     }else{
+      data.success = true;
+      let temp =results[0];
+      data.id = temp.eventID;
+      data.type = temp.priority;
+      data.remark = temp.remark;
+      if (temp.remark == undefined || temp.remark == 'undefined') {
+        data.remark = '';
+      }
+      data.name = temp.eventName;
+      data.tagData = [];
+      temp.tag = temp.tag.substring(1,temp.tag.length-1);
+      temp.tag = temp.tag.split(',')
+      for(let i =0; i<temp.tag.length; i++) {
+        let obj = {};
+        obj.key = i;
+        obj.label = temp.tag[i];
+        obj.disabled =false;
+        data.tagData.push(obj);
+      }
+      data.remaining = temp.targetTotal=='max'?'无限': (parseInt(temp.targetTotal)-parseInt(temp.total));
+      data.eventCreateTime = temp.createTime;
+      switch (temp.type) {
+        case 'y': {
+          switch (temp.y) {
+            case 'every': data.alertType = '每年';
+            break;
+            case 'own': data.alertType = '自定义年份';
+            break;
+            case'odd' : data.alertType = '奇数年';
+            break;
+            case'even' : data.alertType = '偶数年';
+            break;
+          }
+        }
+        break;
+        case 'm': {
+          switch(temp.m) {
+            case'every' :data.alertType = '每月';
+            break;
+            case'own' :data.alertType = '自定义月份';
+            break;
+            case'odd' : data.alertType = '奇数月';
+            break;
+            case'even' : data.alertType = '偶数月';
+            break;
+          }
+        }
+        break;
+        case 'd': {
+          switch(temp.d) {
+            case'workday' : data.alertType = '工作日';
+            break;
+            case'weekend' : data.alertType = '周末';
+            break;
+            case'every' : data.alertType = '每天';
+            break;
+            case'own' : data.alertType = '自定义天';
+            break;
+            case'odd' : data.alertType = '奇数天';
+            break;
+            case'even' : data.alertType = '偶数天';
+            break;
+          }
+        }
+        break;
+      }
+    //   var actions = [];
+    //   for(let i =0; i<temp.tag.length; i++) {
+    //     var action = () => {
+    //       return new Promise(resolve => {
+    //         let sql1 = `SELECT * FROM tag WHERE NAME = '`+temp.tag[i] + `'`;
+    //         connection.query(sql1, function (error, results, fields) {
+    //           if(error) {
+    //             console.log('获取标签详情出错');
+    //           }else {
+    //             let obj = {};
+    //             obj.key = results[0].id;
+    //             obj.name = results[0].name;
+    //             data.tag.push(obj);
+    //           }
+    //         });
+    //       })
+    //     }
+    //     actions.push(action());
+    //   }
+    //   Promise.all(actions).then(() => {
+    //     console.log('查询全部完毕')
+    //     console.log(data.tag, 'data.tag');
+    // })
+      res.end(JSON.stringify(data));
+      }
+   });
+});
+
+// 事情完成的处理
+router.post('/today/doit', function(req,res){
+   // 编码
+   res.setHeader('Content-Type','text/plain; charset=utf-8');
+   // 输出接口
+   console.log('接口:',req.url,' 参数：',req.body);
+   // 修改事件状态，设置为提醒关闭
+   let sql1 = `UPDATE event SET eventStatus=2 WHERE eventID=` +req.body.id;
+   connection.query(sql1, function (error, results, fields) {
+     if(error) {
+        console.log('响应用户处理，更新事件失败');
+        console.log(sql);
+     }else{
+      console.log('响应用户处理，更新事件成功');
+     }
+   });
+   // 获取事件的信息
+   let item = {};
+   let sql2 = `SELECT * FROM event WHERE eventID =`+ req.body.id;
+   connection.query(sql2,  function (error, results, fields) {
+     if(error){
+       console.log('查询事件详情失败');
+      console.log(sql);
+     }else{
+       item = results[0];
+        // 关闭历史记录，并设置为用户处理
+        let date = new Date();
+        let sql3 = `UPDATE history SET loges='0', hisStatus ='0', usertime='`+ formatDate(date) + ' ' +getHMS(date) +`' where eventID= '`+ item.eventID +`' && hisOrder='`+item.total + `'`;
+        connection.query(sql3, async function (error, results, fields) {
+          if(error) {
+            console.log('响应用户处理，关闭历史记录失败');
+            console.log(sql3);
+          }else{
+            console.log('响应用户处理，关闭历史记录成功');
+            // 更新今日统计
+            await updateStatisticsDoTotal(req.body.userid);
+            // 计算下一次提醒时间
+            await getNextTime(item);
+          }
+        });
+     }
+   });
+   let data ={};
+   data.success = true;
+   res.end(JSON.stringify(data));
+});
+
+//更新统计，已做+1
+function updateStatisticsDoTotal(userid) {
+  let sql2 = `UPDATE statistics SET doTotal =doTotal+1 WHERE createTime='`+ formatDate(new Date()) +`' && userid='`+ userid +`'`;
+  connection.query(sql2, function (error, results, fields) {
+    if(error) {
+      console.log('更新统计，已做+1，失败');
+      console.log(sql);
+    }else{
+      console.log('更新统计，已做+1，成功');
+    }
+  });
+}
+
+// 更新统计，总数+1
+function statisticsToTalAdd(userid) {
+  let sql2 = `UPDATE statistics SET total = total+1 WHERE createTime='`+ formatDate(new Date()) +`' && userid='`+ userid +`'`;
+  connection.query(sql2, function (error, results, fields) {
+    if(error) {
+      console.log('更新统计总数+1，失败');
+      console.log(sql);
+    }else{
+      console.log('更新统计总数+1，成功');
+    }
+  });
+} 
+
 
 // 查询今天的待做事项
 router.post('/list/todo/today', function(req,res) {
@@ -70,17 +743,45 @@ router.post('/list/todo/today', function(req,res) {
   res.setHeader('Content-Type','text/plain; charset=utf-8');
   // 输出接口
   console.log('接口:',req.url,' 参数：',req.body);
+  // 按照tag的查询处理
+  let tags = [];
+  let tagData = ' ' ;
+  if (req.body.type == 'tag') {
+    tag = req.body.tagData;
+    for (let i =0; i<tag.length;i++) {
+      tagData += `&& tag LIKE '%`+tag[i]+`%' `;
+    }
+    console.log(tagData, 'tagData');
+  }
   let data = {};
-  let sql1 = `SELECT count(eventID) as total FROM event WHERE eventStatus=1`;
+  let sql1 = `SELECT count(eventID) as total FROM event WHERE eventStatus=1 && userId=`+ req.body.userId;
+  if (req.body.type == 'tag') {
+    sql1 = `SELECT count(eventID) as total FROM event WHERE eventStatus=1 && userId=`+ req.body.userId + tagData;
+  }
   connection.query(sql1,  function (error, results, fields) {
-    data.total = results[0].total
+    if(error) {
+      console.log('查询总条数失败');
+    }else{
+      console.log(results);
+      data.total = results[0].total
+    }
   });
   let startData =  (req.body.page-1)*req.body.rows;
-  let endData = req.body.page*req.body.rows+req.body.rows;
-  let sql = `SELECT * FROM event WHERE eventStatus=1  limit `+ startData +`,`+req.body.rows;
+  // let endData = req.body.page*req.body.rows+req.body.rows;
+  let sql = `SELECT * FROM event WHERE eventStatus=1 && userId=`+ req.body.userId +` limit `+ startData +`,`+req.body.rows;
+  if (req.body.type == 'type') {
+    sql = `SELECT * FROM event WHERE eventStatus=1 && userId=`+ req.body.userId + ` ORDER BY priority limit `+ startData +`,`+req.body.rows;
+  }
+  if (req.body.type == 'time') {
+    sql = `SELECT * FROM event WHERE eventStatus=1 && userId=`+ req.body.userId + ` ORDER BY timepoint limit `+ startData +`,`+req.body.rows;
+  }
+  if (req.body.type == 'tag') {
+    sql = `SELECT * FROM event WHERE eventStatus=1 && userId=`+ req.body.userId + tagData +` ORDER BY timepoint limit `+ startData +`,`+req.body.rows;
+  }
   connection.query(sql,  function (error, results, fields) {
     if (error) {
       console.log('查询今日待做事项失败');
+      console.log(sql);
     }else{
       data.success = true;
       data.data = []
@@ -101,6 +802,10 @@ router.post('/list/todo/today', function(req,res) {
         temp.id = results[i].eventID;
         data.data.push(temp);
       }
+      // if(flag) {
+      //   createStatistics(req.body.id, data.total);
+      //   flag = false;
+      // }
       res.end(JSON.stringify(data));
     }
   });
@@ -115,28 +820,29 @@ router.post('/todo/addEvent', function (req, res) {
   // 获取创建时间
   createTime = formatDate(new Date());
   //处理开始的参数
+  let startTime;
   if (req.body.startTime == '' || req.body.startTime == undefined) {
     startTime = createTime;
   }else {
     startTime = formatDate((new Date(req.body.startTime)).getTime()+1000*60*60*8);
   }
   // 处理提醒方式的参数
-  let interval=0, ranges=0, targetTotal=0;
+  let intervals=0, ranges=0, targetTotal=0;
   targetTotal = 'max';
   if (req.body.type == 'once') targetTotal = 1;
   if (req.body.times == 'yes') {
     targetTotal = req.body.ownNum
   }
-  interval = req.body.ownInterval;
+  intervals = req.body.ownInterval;
   ranges = req.body.ownRange;
   
   let temp = startTime || createTime;
-  let item = initNextTime(temp, req.body.repeatType, req.body.type,ranges);
+  let item = initNextTime(temp, req.body.repeatType, req.body.type, ranges);
 
-  let sql = 'insert into event(userId, intervals, ranges, targetTotal,createTime,startTime,nextSTime,nextETime,eventStatus,type,y,m,d,tag,priority,timepoint,remark,eventName) '
-  +'values( \''+ req.body.userId +'\', \''+ interval +'\',  \''+ ranges +'\', \''+ targetTotal +'\',\''+ createTime +'\',\''+ startTime +'\', \''+ item.st +'\', \''+ item.et +'\', 0,\''+ req.body.repeatType +'\',\''+ req.body.type +'\',\''+ req.body.type +'\',\''+ req.body.type +'\',\'['+ req.body.tagData +']\',\''+ req.body.priority +'\',\''+ req.body.deadline +'\',\''+ req.body.remark +'\',\''+ req.body.name +'\')';
+  let sql = 'insert into event(eventIsSleep, userId, intervals, ranges, targetTotal,createTime,startTime,nextSTime,nextETime,eventStatus,type,y,m,d,tag,priority,timepoint,remark,eventName) '
+  +'values( 0, \''+ req.body.userId +'\', \''+ intervals +'\',  \''+ ranges +'\', \''+ targetTotal +'\',\''+ createTime +'\',\''+ startTime +'\', \''+ item.st +'\', \''+ item.et +'\', 0,\''+ req.body.repeatType +'\',\''+ req.body.type +'\',\''+ req.body.type +'\',\''+ req.body.type +'\',\'['+ req.body.tagData +']\',\''+ req.body.priority +'\',\''+ req.body.deadline +'\',\''+ req.body.remark +'\',\''+ req.body.name +'\')';
 
-    connection.query(sql, function (error, results, fields) {
+  connection.query(sql, function (error, results, fields) {
     let data = {};
     if (error) {
       console.log('查询数据库失败');
@@ -145,17 +851,16 @@ router.post('/todo/addEvent', function (req, res) {
     else {
       console.log('新增todo成功');
       data.success = true;
+      initEvent();
     }
     res.end(JSON.stringify(data));
   });
-  initEvent();
 });
 
 // 添加新的标签
 router.post('/tagData/add', function (req, res) {
   // 输出接口
-  // console.log('接口:',req.url,' 参数：',req.body);
-  console.log(req.body.name);
+  console.log('接口:',req.url,' 参数：',req.body);
   // 编码
   res.setHeader('Content-Type','text/plain; charset=utf-8');
   connection.query('insert into tag(name) values(\''+ req.body.name +'\')', function (error, results, fields) {
@@ -202,15 +907,6 @@ router.post('/tagData/list', function (req, res) {
 });
 
 
-// 测试函数
-router.post('/test', function (req, res) {
-  // 编码
-  // res.setHeader('Content-Type','text/plain; charset=utf-8');
-  // 输出接口
-  console.log('接口:',req.url,' 参数：',req.body);
-
-});
-
 // 初始化新建事件
 function initEvent(){
   let sql = `SELECT * FROM event WHERE eventID =(SELECT MAX(eventID) FROM event)`;
@@ -220,7 +916,7 @@ function initEvent(){
     } 
     else {
       let item = results[0];
-      if(item.nextSTime <= formatDate(new Date())) {
+      if(item.nextSTime == formatDate(new Date())) {
         item.total++;
         addHis(item);
         updateHandle(item);
@@ -232,50 +928,101 @@ function initEvent(){
 }
 
 // 系统是否需要更新
-function isUpdate(){
-  let sql = `SELECT * FROM systemLog WHERE createTime=`+ formatDate(new Date());
+function isUpdate(userid){
+  let sql = `SELECT * FROM systemLog WHERE createTime='`+ formatDate(new Date()) + `'`;
   connection.query(sql, function(error, results, fields) {
     if(error){
       console.log('查询系统日志错误');
     }else{
       if(results.length ==0) {
-        systemUpdate();
+        // flag = true;
+        systemUpdate(userid);
       }
     }
   })
 }
 
 // 系统每日的更新
-function systemUpdate() {
+ function systemUpdate(userid) {
+  console.log('每日更新');
   // 为所需事件更新休眠状态
-  toSleep();
-  let sql = `SELECT * FROM event WHERE eventIsSleep!=2 && eventStatus!=2`;
-  connection.query(sql,  function(error, results, fields) {
+  // toSleep();
+  // toNextTime();
+  let sql = `SELECT * FROM event WHERE eventIsSleep=='0' && eventStatus!=2`;
+  connection.query(sql, async function(error, results, fields) {
     if(error) {
       console.log('筛选更新数据失败');
     }else{
+      console.log('筛选到',results.length,'条需要更新的数据');
       for(let i=0; i<results.length;i++) {
-        let item = results[i];
-        if (item.nextETime < formatDate(new Date())){
-          if(item.total == item.targetTotal) {
-            sleepHandle(item);
-            if(hisIsClose(item)) {
-              closeHis(item, 3);
+          let item = results[i];
+          console.log('更新事件eventID:',item.eventID, item.total);
+          if (item.nextETime < formatDate(new Date())){
+            console.log(item.total == item.targetTotal, item.total ,item.targetTotal,'---------------------');
+            if(item.total == item.targetTotal) {
+               await sleepHandle(item);
+              // closeHis(item, 3);
+              // await hisIsClose(item);
+            }else{
+              // hisflag = true;
+              await hisIsClose(item);
+              // getNextTime(item);
+              // const fastPromise = new Promise((item, reject) => {  
+              //   hisIsClose(item);
+              // })
+              // const slowPromise = new Promise((item, reject) => {  
+              //   getNextTime(item);
+              // })
+              // co(function * () {  
+              //   yield fastPromise;
+              //   yield slowPromise;
+              // }).then(() => {
+              //   console.log('done')
+              // })
+              // hisIsClose(item);
+              // getNextTime(item);
+              
+              // async.series({
+              //   his:hisIsClose(item),
+              //   nextTime:getNextTime(item)
+              // });
+              // hisIsClose(item);
+              // while(true) {
+              //   if(hflag) { 
+              //     getNextTime(item);
+              //     break;
+              //   }
+              // }
             }
-          }else{
-            if(hisIsClose(item)) {
-              closeHis(item, 3);
-            }
-            getNextTime(item);
           }
-        }else if(item.nextSTime < formatDate(new Date())){
-          eventStatusHandle (item);
-        }
+          if(item.nextSTime <= formatDate(new Date()) && item.nextETime >= formatDate(new Date())){
+            await eventStatusHandle (item);
+          }
       }
     }
   });
+  let sql2 = `INSERT INTO systemlog(createTime) VALUES('`+ formatDate(new Date()) +`')`
+  connection.query(sql2,  function(error, results, fields){
+    if(error) {
+      console.log('插入系统更新记录失败');
+    }else{
+      console.log('插入系统更新记录成功');
+    }
+  });
+  let sql3 = `SELECT count(eventID) as total FROM event WHERE eventStatus='1' && userId='`+ userid + `'`;
+  connection.query(sql3,  function (error, results, fields) {
+    if(error) {
+      console.log('查询总条数失败');
+    }else{
+      let total = results[0].total;
+      createStatistics(userid, total);
+    }
+  });
+}
 
-
+// 计算下一次时间
+function toNextTime(){
+  
 }
 
 // 为所需事件更新nextTime
@@ -294,17 +1041,22 @@ function toNextTime() {
   });
 }
 
-// 判断某条记录是否关闭
+// 判断某条记录是否关闭，并且关闭，如果没有则创建过期的历史记录
 function hisIsClose(item) {
-  let sql = `SELECT hisStatus FROM history WHERE eventID = `+ item.eventID +` && hisOrder=` + item.total;
-  connection.query(sql, function (error, results, fields) {
+  let sql = `SELECT hisStatus FROM history WHERE eventID = '`+ item.eventID +`' && hisOrder='` + item.total +`'`;
+  connection.query(sql,async function (error, results, fields) {
     if (error) {
       console.log('查询记录状态失败');
     }else{
-      if(results[0] == 0) {
-        return false;
+      if(results.length == 0) {
+        await addHisClose(item);
       }else{
-        return true;
+        if(results[0].hisStatus == '1') {
+          await closeHis(item, '3');
+        }
+      }
+      if(item.total != item.targetTotal) {
+         getNextTime(item)
       }
     }
   });
@@ -312,7 +1064,7 @@ function hisIsClose(item) {
 
 // 更新所有需要休眠数据
 function toSleep(){
-  let sql = `SELECT eventID FROM event WHERE total=targetTotal && targetTotal!='max')`;
+  let sql = `SELECT eventID FROM event WHERE total=targetTotal && targetTotal!='max' && eventIsSleep!=2`;
   connection.query(sql, function (error, results, fields) {
     if(error){
       console.log('筛选需要休眠的数据时发生错误');
@@ -394,7 +1146,8 @@ function initEvenD(time) {
 // 初始化下次时间，天，自定义
 function initownD(time, ranges) {
   let st = time;
-  let et = GetDay(time, ranges);
+  let et = GetDay(time, (parseInt(ranges)-1));
+  console.log(st,et,ranges,'-----------------------------')
   return {st, et};
 }
 
@@ -417,7 +1170,7 @@ function initworkday(time) {
 // 初始化下次提醒时间，月，偶数
 function initEvenM(time) {
   let date = Month(time, 0);
-  if ((new Date(time)).getMonth % 2 == 0) {
+  if ((new Date(time)).getMonth % 2 != 0) {
     date = Month(time, 1);
   }
   let et = getLastDateOfMonth(date);;
@@ -428,7 +1181,7 @@ function initEvenM(time) {
 // 初始化下次提醒时间，月，奇数
 function initOddM(time) {
   let date = Month(time, 0);
-  if ((new Date(time)).getMonth % 2 != 0) {
+  if ((new Date(time)).getMonth % 2 == 0) {
     date = Month(time, 1);
   }
   let et = getLastDateOfMonth(date);
@@ -438,7 +1191,7 @@ function initOddM(time) {
 
 // 初始化下次提醒时间，月，自定义
 function initownM(time, ranges) {
-  let date = Month(time, ranges);
+  let date = Month(time, (parseInt(ranges)-1));
   let et = getLastDateOfMonth(date);
   let st = getFirstDateOfMonth(time);
   return {st, et};
@@ -477,13 +1230,14 @@ function initOddY(time) {
 function initownY(time, ranges) {
   let year = (new Date(time)).getFullYear();
   let st = year + '-01-01';
-  let et = year + ranges + '-12-31'
+  let et = year + (parseInt(ranges)-1) + '-12-31'
   return {st, et};
 }
 
 //初始化下次提醒时间，年，每年，一年
 function initeveryY(time) {
   let year = (new Date(time)).getFullYear();
+  console.log(year,'year');
   let st = year + '-01-01';
   let et = year + '-12-31'
   return {st, et};
@@ -516,7 +1270,7 @@ function getNextTime(item) {
       switch(item.d) {
         case'workday' : workday(item);
         break;
-        case'weekend' : weekday(day);
+        case'weekend' : weekday(item);
         break;
         case'every' : everyD(item);
         break;
@@ -531,7 +1285,19 @@ function getNextTime(item) {
 
 // nextTime,天，偶数奇数天
 function oddEvenD(item) {
-  item.nextETime = item.nextSTime = GetDay(item.nextETime, 2);
+  let oddlflag = true;
+  if(item.d == 'even') {
+    oddlflag = false;
+  }
+  if (oddlflag){
+    do {
+      item.nextETime = item.nextSTime = GetDay(item.nextETime, 1);
+    }while(item.nextETime.substring(8,10) %2 ==0)
+  }else{
+    do {
+      item.nextETime = item.nextSTime = GetDay(item.nextETime, 1);
+    }while(item.nextETime.substring(8,10) %2 !=0)
+  }
   item.total++;
   updateHandle(item);
   addHis(item);
@@ -550,8 +1316,8 @@ function oddEvenD(item) {
 
 // nextTime,天，自定义
 function ownD(item){
-  let st = GetDay(item.nextETime, item.intervals);
-  let et = GetDay(st, item.range);
+  let st = GetDay(item.nextETime, parseInt(item.intervals)+1);
+  let et = GetDay(st, parseInt(item.ranges)-1);
   item.nextSTime = st;
   item.nextETime =et;
   item.total++;
@@ -612,7 +1378,7 @@ function workday(item) {
 function everyD(item) {
   let st = GetDay(item.nextETime,1);
   item.nextETime = item.nextSTime =st;
-  total++;
+  item.total++;
   updateHandle(item);
   addHis(item);
   if (item.nextETime < formatDate(new Date())) {
@@ -647,7 +1413,7 @@ function getWeekDay(data) {
 // 获取指定的天
 function GetDay(date, day) {
   var time = new Date(date);
-  time.setDate(time.getDate() + day);//获取Day天后的日期 
+  time.setDate(time.getDate() + parseInt(day));//获取Day天后的日期 
   var y = time.getFullYear();
   var m = time.getMonth() + 1;//获取当前月份的日期 
   var d = time.getDate();
@@ -658,10 +1424,9 @@ function GetDay(date, day) {
 
 // nextTime,月，奇数月，偶数月
 function oddEvenM(item) {
-  let st = Month(item.nextSTime, 2);
-  let et = Month(item.nextETime, 2);
-  item.nextSTime = st
-  item.nextETime = et;
+  // item.nextSTime = GetDay(item.nextETime, 1);
+  item.nextSTime = Month(item.nextSTime, 2);
+  item.nextETime = getLastDateOfMonth(item.nextSTime);
   item.total++;
   updateHandle(item);
   addHis(item);
@@ -680,10 +1445,11 @@ function oddEvenM(item) {
 
 // nextTime,月，自定义月
 function ownM(item) {
-  let st = Month(item.nextETime, item.intervals);
-  let et = Month(st, item.ranges);
-  item.nextSTime = st
-  item.nextETime = et;
+  item.nextSTime = Month(item.nextSTime, parseInt(item.intervals)+1);
+  let et = Month(item.nextSTime, parseInt(item.ranges)-1);
+  item.nextETime = getLastDateOfMonth(et);
+  // item.nextSTime = st
+  // item.nextETime = et;
   item.total++;
   updateHandle(item);
   addHis(item);
@@ -702,9 +1468,8 @@ function ownM(item) {
 
 // nextTime,月，每月
 function everyM(item) {
-  let date = Month(item.nextSTime, 1);
-  item.nextSTime = item.nextETime;
-  item.nextETime = date;
+  item.nextSTime = GetDay(item.nextETime, 1);
+  item.nextETime = getLastDateOfMonth(item.nextSTime);
   item.total++;
   updateHandle(item);
   addHis(item);
@@ -720,7 +1485,7 @@ function everyM(item) {
 // 获取指定的月份
 function Month(date, month) {
   var time = new Date(date);
-  time.setDate(time.getDate());//获取Day天后的日期 
+  // time.setDate(time.getDate());//获取Day天后的日期 
   var y = time.getFullYear();
   var m;
   if (time.getMonth() + month + 1>12){
@@ -729,8 +1494,9 @@ function Month(date, month) {
   }else{
     m = time.getMonth() + month + 1;//获取当前月份的日期 d
   }
-  var d = time.getDate();
   m = m < 10? '0'+ m: m;
+  let times = y + '-' + m
+  var d = (new Date(times)).getDate();
   d = d < 10? '0'+ d: d;
   return y + "-" + m + "-" + d;
 }
@@ -751,13 +1517,14 @@ function getFirstDateOfMonth(time) {
 
 //nextTime,年,奇数，偶数
 function oddEvenY(item) {
-  let year = parseInt((new Date(item.nextETime)).getFullYear())+ 2;
-  item.nextSTime = year.toString() +'-01-01';
-  item.nextETime = year +'-12-30'
+  let year = parseInt((new Date(item.nextSTime)).getFullYear())+ 2;
+  console.log(year,'-----------------------------------------------');
+  item.nextSTime = year +'-01-01';
+  item.nextETime = year +'-12-31'
   item.total++;
   updateHandle(item);
   addHis(item);
-  if (year < (new Date()),getFullYear()) {
+  if (year < (new Date()).getFullYear()) {
     // 关闭历史记录，并设定为用户错过
    closeHis(item, 3);
    if (item.targetTotal > item.total || item.targetTotal == 'max') {
@@ -772,13 +1539,13 @@ function oddEvenY(item) {
 
 //nextTime,年自定义
 function ownY(item) {
- let year = parseInt((new Date(item.nextETime)).getFullYear())+ parseInt(item.intervals);
- item.nextSTime = year.toString() +'-01-01';
- item.nextETime = (year+item.ranges) +'-12-30'
+ let year = parseInt((new Date(item.nextETime)).getFullYear())+ (parseInt(item.intervals)+1);
+ item.nextSTime = year+'-01-01';
+ item.nextETime = (year+parseInt(item.ranges)-1) +'-12-31'
  item.total++;
  updateHandle(item);
  addHis(item);
- if (year < (new Date()),getFullYear()) {
+ if (year < (new Date()).getFullYear()) {
    // 关闭历史记录，并设定为用户错过
   closeHis(item, 3);
   if (item.targetTotal > item.total || item.targetTotal == 'max') {
@@ -793,13 +1560,18 @@ function ownY(item) {
 
 // nextTime,每年
 function everyY (item) {
- let year = (new Date(item.nextSTime)).getFullYear()+1;
+  console.log((new Date(item.nextSTime)).getFullYear(), '次年');
+ let year = parseInt((new Date(item.nextSTime)).getFullYear())+1;
  item.nextSTime = year +'-01-01';
- item.nextETime = year+'-12-30'
+ item.nextETime = year +'-12-31'
  item.total++;
  updateHandle(item);
  addHis(item);
- if (year < (new Date()),getFullYear()) {
+ console.log(year);
+ console.log((new Date()).getFullYear());
+
+ console.log(year < (new Date()).getFullYear());
+ if (year < (new Date()).getFullYear()) {
    // 关闭历史记录，并设定为用户错过
   closeHis(item, 3);
   everyY(item);
@@ -811,11 +1583,12 @@ function everyY (item) {
 // 更新事件提醒次数，提醒日期范围
 function updateHandle(item) {
   let sql = '';
-  if (item.total == item.targetTotal) {
-    sql = `UPDATE  event SET eventIsSleep=2,total=`+ item.total +`,nextSTime='`+ item.nextSTime +`',nextETime='`+ item.nextETime +`' WHERE eventID=`+item.eventID;
-  }else{
-    sql = `UPDATE  event SET total=`+ item.total +`,nextSTime='`+ item.nextSTime +`',nextETime='`+ item.nextETime +`' WHERE eventID=`+item.eventID;
-  }
+  // if (item.total == item.targetTotal) {
+  //   sql = `UPDATE  event SET eventIsSleep=2,total=`+ item.total +`,nextSTime='`+ item.nextSTime +`',nextETime='`+ item.nextETime +`' WHERE eventID=`+item.eventID;
+  // }else{
+  //   sql = `UPDATE  event SET total=`+ item.total +`,nextSTime='`+ item.nextSTime +`',nextETime='`+ item.nextETime +`' WHERE eventID=`+item.eventID;
+  // }
+  sql = `UPDATE  event SET total=`+ item.total +`,nextSTime='`+ item.nextSTime +`',nextETime='`+ item.nextETime +`' WHERE eventID=`+item.eventID;
   connection.query(sql, function (error, results, fields) {
     if(error) {
       console.log('更新事件提醒次数失败eventID:'+item.eventID);
@@ -826,21 +1599,38 @@ function updateHandle(item) {
 }
 
 // 关闭对应的历史记录
-function closeHis(item, log) {
-  let sql =`UPDATE  history SET LOG = '`+ log+`',hisStatus=0 WHERE eventID = '`+ item.eventID +`' && hisOrder=`+item.total;
-  connection.query(sql, function(error, results, fields){
+async function closeHis(item, loges) {
+  let sql =`UPDATE  history SET loges = '`+ loges+`',hisStatus='0' WHERE eventID = '`+ item.eventID +`' && hisOrder='`+item.total +`'`;
+  connection.query(sql,await function(error, results, fields){
     if (error) {
       console.log('关闭对应历史记录出错eventID:',item.eventID,' ---hisOrder:', item.total);
+      console.log(sql);
+    }else{
+      console.log('关闭历史记录成功eventID:',item.eventID,'----total', item.total);
+    }
+  });
+}
+
+//新增一个关闭的历史记录
+function addHisClose(item) {
+  let sql = `INSERT INTO history(eventName, eventID,createTime,hisStatus,userid,hisOrder,startTime,endTime,loges) VALUES ('`+ item.eventName +`','`+ item.eventID +`', '`+ formatDate(new Date()) +`', '0','`+ item.userId +`', '`+ item.total +`', '`+ item.nextSTime +`', '`+ item.nextETime +`','3')`;
+  connection.query(sql, function(error, results, fields) {
+    if (error) {
+      console.log('新增过期历史记录失败');
+      console.log(sql);
+    } else {
+      console.log('新增过期历史记录成功');
     }
   });
 }
 
 // 新增历史记录，状态为开启状态1
 function addHis(item) {
-  let sql = `INSERT INTO history(eventID,createTime,hisStatus,userid, hisOrder,startTime,endTime) VALUES ('`+ item.eventID +`', '`+ formatDate(new Date()) +`', 1,'`+ item.userId +`', '`+ item.total +`', '`+ item.nextSTime +`', '`+ item.nextETime +`')`;
+  let sql = `INSERT INTO history(eventName, eventID,createTime,hisStatus,userid,hisOrder,startTime,endTime) VALUES ('`+ item.eventName +`', '`+ item.eventID +`', '`+ formatDate(new Date()) +`', '1','`+ item.userId +`', '`+ item.total +`', '`+ item.nextSTime +`', '`+ item.nextETime +`')`;
   connection.query(sql, function(error, results, fields) {
     if (error) {
       console.log('新增历史记录失败');
+      console.log(sql);
     } else {
       console.log('新增历史记录成功');
     }
@@ -850,7 +1640,7 @@ function addHis(item) {
 
 // 事件设置为休眠
 function sleepHandle (item) {
-  let sql = 'update event set eventIsSleep=2 where eventID='+item.eventID;
+  let sql = 'update event set eventIsSleep=2, eventStatus=3 where eventID='+item.eventID;
   connection.query (sql, function (error, results, fields) {
     let data;
     if (error) {
@@ -859,6 +1649,7 @@ function sleepHandle (item) {
     }
     else {
       console.log('修改事件为睡眠状态成功eventid:' + item.eventID);
+      hisIsClose(item);
     }
   });
 }
@@ -872,6 +1663,7 @@ function eventStatusHandle (item) {
   if (start <= now && end >= now) {
     sql = 'update event set eventStatus=1 where eventID='+item.eventID;
     console.log('设置事件状态为提醒中eventid:' + item.eventID);
+    statisticsToTalAdd(item.userId)
   }else{
     sql = 'update event set eventStatus=0 where eventID='+item.eventID;
     console.log('设置事件状态为待提醒eventid:' + item.eventID);
@@ -879,10 +1671,8 @@ function eventStatusHandle (item) {
   connection.query (sql, function(error, results, fields) {
     if (error) {
       console.log('修改事件状态失败eventid:' + item.eventID);
-      return false;
     }else {
       console.log('修改事件状态成功eventid:' + item.eventID);
-      return true;
     }
   })
 }
