@@ -27,6 +27,158 @@ router.post('/test', function (req, res) {
   console.log(formatDate(date) + ' ' +getHMS(date));
 });
 
+// 登录
+router.post('/login', function (req, res) {
+  // 编码
+  res.setHeader('Content-Type','text/plain; charset=utf-8');
+  // 输出接口
+  console.log('接口:',req.url,' 参数：',req.body);
+  let sql = `SELECT id FROM users WHERE NAME='`+ req.body.username +`' && PASSWORD='`+ req.body.password +`'`
+  let data ={};
+  data.success = false;
+  connection.query(sql, function(error, result) {
+    if(error) {
+      console.log('登录查询信息失败');
+      console.log(sql);
+      res.end(JSON.stringify(data));
+    }else{
+      if(result.length > 0) {
+        data.success = true;
+        data.messags = '';
+        data.id = result[0].id;
+        res.end(JSON.stringify(data));
+      }else{
+        data.messags = '用户名或密码错误，请重试';
+        res.end(JSON.stringify(data));
+      }
+    }
+  });
+});
+
+// 注册
+router.post('/sign', function (req, res) {
+  // 编码
+  res.setHeader('Content-Type','text/plain; charset=utf-8');
+  // 输出接口
+  console.log('接口:',req.url,' 参数：',req.body);
+  let sql = `SELECT * FROM users WHERE NAME='`+ req.body.username +`'`;
+  let sql2 = `SELECT * FROM users WHERE email='`+ req.body.email +`'`;
+  let data ={};
+  data.success = false;
+  connection.query(sql2, function(error, result){
+    if(error) {
+      console.log('新增用户校验邮箱失败');
+      console.log(sql2);
+      data.message = '注册失败，请稍后重试'
+      res.end(JSON.stringify(data));
+    }else{
+      console.log(result,'result');
+      if(result.length != 0) {
+        data.message ='邮箱已存在，请使用别的邮箱注册';
+        data.data ='email';
+        res.end(JSON.stringify(data));
+      }else{
+        connection.query(sql, function(error, result2){
+          if(error) {
+            console.log('新增用户校验用户名失败');
+            console.log(sql);
+            data.message = '注册失败，请稍后重试'
+            res.end(JSON.stringify(data));
+          }else{
+            if(result2.length != 0){
+              data.message ='用户名已存在，请使用别的用户名注册'
+              data.data = 'name';
+              res.end(JSON.stringify(data));
+            }else{
+              let sql3 = `INSERT INTO users(NAME,PASSWORD,email) VALUES('`+ req.body.username +`','`+ req.body.password +`','`+ req.body.email +`')`
+              connection.query(sql3, function(error, result) {
+                if(error) {
+                  console.log('新增用户失败');
+                  console.log(sql);
+                  data.message = '注册失败，请稍后重试'
+                  res.end(JSON.stringify(data));
+                }else{
+                  data.success = true;
+                  res.end(JSON.stringify(data));
+                }
+              });
+            }
+          }
+        });
+      }
+    }
+  })
+});
+
+// 个人中心
+router.post('/userData', function (req, res) {
+  // 编码
+  res.setHeader('Content-Type','text/plain; charset=utf-8');
+  // 输出接口
+  console.log('接口:',req.url,' 参数：',req.body);
+  let sql = `SELECT * FROM users WHERE id='`+ req.body.id +`'`;
+  let data ={};
+  data.success = false;
+  connection.query(sql, function(error, result) {
+    if(error) {
+      console.log('登录用户个人信息失败');
+      console.log(sql);
+      res.end(JSON.stringify(data));
+    }else{
+      data.success = true;
+      data.name = result[0].name
+      data.id = result[0].id;
+      res.end(JSON.stringify(data));
+    }
+  });
+});
+
+// 修改密码
+router.post('/editpassword', function (req, res) {
+  // 编码
+  res.setHeader('Content-Type','text/plain; charset=utf-8');
+  // 输出接口
+  console.log('接口:',req.url,' 参数：',req.body);
+  let sql = `UPDATE users set password='`+ req.body.ps +`' WHERE id='`+ req.body.id +`' && email= '`+ req.body.email +`'`;
+  let data ={};
+  data.success = false;
+  connection.query(sql, function(error, result) {
+    if(error) {
+      console.log('修改密码失败');
+      console.log(sql);
+      res.end(JSON.stringify(data));
+    }else{
+      data.success = true;
+      res.end(JSON.stringify(data));
+    }
+  });
+});
+
+// 验证邮箱
+router.post('/edituser', function (req, res) {
+  // 编码
+  res.setHeader('Content-Type','text/plain; charset=utf-8');
+  // 输出接口
+  console.log('接口:',req.url,' 参数：',req.body);
+  let sql = `SELECT * FROM users WHERE id='`+ req.body.id +`' && email= '`+ req.body.email +`'`;
+  let data ={};
+  data.success = false;
+  connection.query(sql, function(error, result) {
+    if(error) {
+      console.log('查询邮箱信息失败');
+      console.log(sql);
+      res.end(JSON.stringify(data));
+    }else{
+      if(result.length > 0){
+        data.success = true;
+        res.end(JSON.stringify(data));
+      }else{
+        res.end(JSON.stringify(data));
+      }
+    }
+  });
+});
+
 // function (error, results, fields) 
 // res.end(JSON.stringify(data));
 
@@ -103,10 +255,22 @@ router.post('/eventlist', function (req, res) {
   res.setHeader('Content-Type','text/plain; charset=utf-8');
   // 输出接口
   console.log('接口:',req.url,' 参数：',req.body);
-  let sql = `SELECT * FROM event WHERE userid = '`+ req.body.userid +`'`;
   let data = {};
+  let sql = `SELECT count(eventID) as total FROM event WHERE userid = '`+ req.body.userid +`'`;
+  connection.query(sql, function(error, result) {
+    if(error) {
+      console.log('查询总数失败');
+      console.log(sql);
+    }else{
+      data.total = result[0].total;
+      console.log(data.total,'hahhahahahhahah');
+
+    }
+  });
+  let startData =  (req.body.page-1)*req.body.rows;
+  let sql1 = `SELECT * FROM event WHERE userid = '`+ req.body.userid +`' limit `+ startData +`,`+req.body.rows;
   data.success = false;
-  connection.query(sql, function(error, result){
+  connection.query(sql1, function(error, result){
     if(error){
       console.log('查询时间清单失败');
       console.log(sql);
@@ -114,7 +278,6 @@ router.post('/eventlist', function (req, res) {
     }else{
       data.success = true;
       data.data = [];
-      data.total = result.length;
       for(let i = 0; i<result.length;i++){
         let temp = result[i];
         let unit;
@@ -269,7 +432,9 @@ router.post('/pandect/Yestday', async function (req, res) {
 // 首页
 router.post('/init', async function (req, res) {
   await init(req.body.userid);
-  res.end();
+  setTimeout(() => {
+    res.end()
+  },1300)
 });
 
 // 初入页面的响应
@@ -916,7 +1081,7 @@ function initEvent(){
     } 
     else {
       let item = results[0];
-      if(item.nextSTime == formatDate(new Date())) {
+      if(item.nextSTime <= formatDate(new Date())) {
         item.total++;
         addHis(item);
         updateHandle(item);
@@ -948,10 +1113,11 @@ function isUpdate(userid){
   // 为所需事件更新休眠状态
   // toSleep();
   // toNextTime();
-  let sql = `SELECT * FROM event WHERE eventIsSleep=='0' && eventStatus!=2`;
+  let sql = `SELECT * FROM event WHERE eventIsSleep='0' && eventStatus!=2`;
   connection.query(sql, async function(error, results, fields) {
     if(error) {
       console.log('筛选更新数据失败');
+      console.log(sql);
     }else{
       console.log('筛选到',results.length,'条需要更新的数据');
       for(let i=0; i<results.length;i++) {
