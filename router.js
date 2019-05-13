@@ -478,7 +478,7 @@ router.post('/list/todo/yesterdayByName', function(req,res){
   // 输出接口
   console.log('接口:',req.url,' 参数：',req.body);
   let startData =  (req.body.page-1)*req.body.rows;
-  let sql = `SELECT eventID,hisOrder,loges,createTime,startTime,endTime,hisId FROM history WHERE endTime<= '`+ formatDate(new Date()) +`'&& userid= '`+ req.body.userId +`' && hisStatus!=1 && eventName LIKE '`+ req.body.name +`%' limit `+ startData +`,`+req.body.rows;
+  let sql = `SELECT eventID,hisOrder,loges,createTime,startTime,endTime,hisId FROM history WHERE endTime<= '`+ formatDate(new Date()) +`'&& userid= '`+ req.body.userId +`' && hisStatus!=1 && eventName LIKE '%`+ req.body.name +`%' limit `+ startData +`,`+req.body.rows;
   let sql3 = `SELECT count(userid) as total FROM history WHERE endTime<= '`+ formatDate(new Date()) +`'&& userid= '`+ req.body.userId +`' && hisStatus!=1 && eventName LIKE '%`+ req.body.name +`%'`;  
   let data = {};
   data.data = [];
@@ -498,7 +498,7 @@ router.post('/list/todo/yesterdayByName', function(req,res){
       for(let i=0; i<results.length; i++){
         let temp ={};
         temp.eventID = results[i].eventID;
-        let sql2 = `SELECT * FROM event WHERE eventID= '`+ temp.eventID +`' && eventName like '`+ req.body.name +`%'`;
+        let sql2 = `SELECT * FROM event WHERE eventID= '`+ temp.eventID +`'`;
         connection.query(sql2, function(error,results2) {
           if(error){
             console.log('查询昨日todo，查询事件详情失败');
@@ -533,6 +533,10 @@ router.post('/list/todo/yesterdayByName', function(req,res){
             }
           }
         });
+      }
+      if(results.length == 0) {
+        data.success = true;
+        res.end(JSON.stringify(data));
       }
     }
   });
@@ -738,6 +742,7 @@ router.post('/list/todo/detail', function(req,res){
       let temp =results[0];
       data.id = temp.eventID;
       data.type = temp.priority;
+      data.timepoint = temp.timepoint;
       data.remark = temp.remark;
       if (temp.remark == undefined || temp.remark == 'undefined') {
         data.remark = '';
@@ -948,6 +953,7 @@ router.post('/list/todo/today', function(req,res) {
       console.log('查询今日待做事项失败');
       console.log(sql);
     }else{
+      console.log(sql);
       data.success = true;
       data.data = []
       for(let i=0; i<results.length; i++) {
@@ -957,10 +963,8 @@ router.post('/list/todo/today', function(req,res) {
         if (results[i].priority == 1) temp.type = 'need';
         if (results[i].priority == 2) temp.type = 'free';
         temp.remark = results[i].remark;
-        console.log(results[i].timepoint, 'results[i].timepoint');
-        console.log((new Date(results[i].timepoint)).getTime(), 'results[i].timepoint');
-        if (results[i].timepoint) {
-          temp.timepoint = (new Date(results[i].timepoint)).getTime();
+        if (results[i].timepoint != NaN || results[i].timepoint != 'NaN') {
+          temp.timepoint = formatDate(new Date()) + ' ' + results[i].timepoint;
         }else{
           temp.timepoint = 0;
         }
@@ -1004,8 +1008,13 @@ router.post('/todo/addEvent', function (req, res) {
   let temp = startTime || createTime;
   let item = initNextTime(temp, req.body.repeatType, req.body.type, ranges);
 
+  let timeponit = "24:00:00";
+  if(req.body.deadline){
+    timeponit = req.body.deadline
+  }
+
   let sql = 'insert into event(eventIsSleep, userId, intervals, ranges, targetTotal,createTime,startTime,nextSTime,nextETime,eventStatus,type,y,m,d,tag,priority,timepoint,remark,eventName) '
-  +'values( 0, \''+ req.body.userId +'\', \''+ intervals +'\',  \''+ ranges +'\', \''+ targetTotal +'\',\''+ createTime +'\',\''+ startTime +'\', \''+ item.st +'\', \''+ item.et +'\', 0,\''+ req.body.repeatType +'\',\''+ req.body.type +'\',\''+ req.body.type +'\',\''+ req.body.type +'\',\'['+ req.body.tagData +']\',\''+ req.body.priority +'\',\''+ req.body.deadline +'\',\''+ req.body.remark +'\',\''+ req.body.name +'\')';
+  +'values( 0, \''+ req.body.userId +'\', \''+ intervals +'\',  \''+ ranges +'\', \''+ targetTotal +'\',\''+ createTime +'\',\''+ startTime +'\', \''+ item.st +'\', \''+ item.et +'\', 0,\''+ req.body.repeatType +'\',\''+ req.body.type +'\',\''+ req.body.type +'\',\''+ req.body.type +'\',\'['+ req.body.tagData +']\',\''+ req.body.priority +'\',\''+ timeponit +'\',\''+ req.body.remark +'\',\''+ req.body.name +'\')';
 
   connection.query(sql, function (error, results, fields) {
     let data = {};
